@@ -140,13 +140,20 @@ DISABLE_ARG(japi,	[Disable Java API bindings])
 WITHOUT_ARG(libssl,	[Disable libssl])
 WITHOUT_ARG(apicli,	[Disable binary api CLI])
 
+AC_ARG_WITH(odplib,
+            AC_HELP_STRING([--with-odplib],[Use odplib]),
+            [with_odplib=1],
+            [with_odplib=0])
+
+AM_CONDITIONAL(WITH_ODPLIB, test $with_odplib = 1)
+
 AC_ARG_WITH(unix,
             AC_HELP_STRING([--with-unix],[Compile unix version of clib]),
 	    [],
 	    [case $host_os in
 	      darwin* | linux*) with_unix=yes;;
 	      *) with_unix=no;;
-	      esac])
+	     esac])
 
 AM_CONDITIONAL(WITH_UNIX, test "$with_unix" = "yes")
 
@@ -191,6 +198,8 @@ PLUGIN_ENABLED(memif)
 PLUGIN_ENABLED(pppoe)
 PLUGIN_ENABLED(sixrd)
 PLUGIN_ENABLED(nat)
+AM_COND_IF([WITH_ODPLIB],
+[PLUGIN_ENABLED(odp)],[PLUGIN_DISABLED(odp)])
 
 ###############################################################################
 # Dependency checks
