@@ -142,7 +142,9 @@ typedef struct
   /**< Only valid for first buffer in chain. Current length plus
      total length given here give total number of bytes in buffer chain.
   */
-  u32 opaque2[13];  /**< More opaque data, currently unused */
+  u32 align_pad; /**< available */
+  void *l2_priv_data; /**< L2 node private data pointer */
+  u32 opaque2[10];  /**< More opaque data, see ../vnet/vnet/buffer.h */
 
   /***** end of second cache line */
     CLIB_CACHE_LINE_ALIGN_MARK (cacheline2);
