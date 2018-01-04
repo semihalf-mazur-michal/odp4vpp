@@ -278,7 +278,6 @@ odp_packet_delete_if (vlib_main_t * vm, u8 * host_if_name)
   odp_packet_main_t *om = odp_packet_main;
   odp_packet_if_t *oif = 0;
   uword *p;
-  vlib_thread_main_t *tm = vlib_get_thread_main ();
   int q;
 
   p = mhash_get (&om->if_index_by_host_if_name, host_if_name);
@@ -307,11 +306,6 @@ odp_packet_delete_if (vlib_main_t * vm, u8 * host_if_name)
   ethernet_delete_interface (vnm, oif->hw_if_index);
 
   pool_put (om->interfaces, oif);
-
-  if (tm->n_vlib_mains > 1 && pool_elts (om->interfaces) == 0)
-    {
-      odp_pool_destroy (om->pool);
-    }
 
   return 0;
 }
@@ -572,6 +566,30 @@ odp_packet_init (vlib_main_t * vm)
 }
 
 VLIB_INIT_FUNCTION (odp_packet_init);
+
+static clib_error_t *
+odp_packet_exit (vlib_main_t * vm)
+{
+  odp_packet_main_t *om = odp_packet_main;
+  odp_packet_if_t *port;
+
+  vlib_worker_thread_barrier_sync (vm);
+
+  /* *INDENT-OFF* */
+  pool_foreach (port, om->interfaces,
+    ({
+      odp_packet_delete_if (vm, port->host_if_name);
+    }));
+  /* *INDENT-ON* */
+
+  odp_pool_destroy (om->pool);
+  odp_shm_free (odp_shm_lookup ("odp_packet_main"));
+  odp_packet_main = 0x0;
+
+  return 0;
+}
+
+VLIB_MAIN_LOOP_EXIT_FUNCTION (odp_packet_exit);
 
 /* *INDENT-OFF* */
 VLIB_PLUGIN_REGISTER () = {
