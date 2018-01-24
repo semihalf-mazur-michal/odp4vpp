@@ -177,6 +177,8 @@ odp_adjust_buffer (vlib_buffer_t * buf, odp_packet_t pkt,
 {
   buf->current_length = odp_packet_len (pkt);
   buf->current_data = 0;
+  buf->current_data = (int) ((intptr_t) odp_packet_data (pkt) -
+			     (intptr_t) buf->data);
   buf->total_length_not_including_first_buffer = 0;
   buf->flags = VLIB_BUFFER_TOTAL_LENGTH_VALID;
   vnet_buffer (buf)->sw_if_index[VLIB_RX] = oif->sw_if_index;
@@ -349,8 +351,9 @@ odp_packet_device_input_fn (vlib_main_t * vm, vlib_node_runtime_t * node,
 	  else
 	    next0 = odp_rx_next_from_etype (pkt, b0);
 
-	  if (next0 != VNET_DEVICE_INPUT_NEXT_ETHERNET_INPUT)
-	    vlib_buffer_advance (b0, sizeof (ethernet_header_t));
+	  b0->current_data = (int) ((intptr_t) odp_packet_data (pkt) -
+				    (intptr_t) b0->data);
+	  vlib_buffer_advance (b0, sizeof (ethernet_header_t));
 
 	  /* trace */
 	  ODP_TRACE_BUFFER (n_trace, b0, next0, vm, node, oif);
