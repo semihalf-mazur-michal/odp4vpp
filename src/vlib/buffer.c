@@ -1062,6 +1062,8 @@ vlib_buffer_main_init (struct vlib_main_t * vm)
   vec_validate (vm->buffer_main, 0);
   bm = vm->buffer_main;
 
+  clib_spinlock_init (&bm->buffer_known_hash_lockp);
+
   if (vlib_buffer_callbacks)
     {
       /* external plugin has registered own buffer callbacks
@@ -1080,7 +1082,6 @@ vlib_buffer_main_init (struct vlib_main_t * vm)
   bm->cb.vlib_buffer_free_no_next_cb = &vlib_buffer_free_no_next_internal;
   bm->cb.vlib_buffer_delete_free_list_cb =
     &vlib_buffer_delete_free_list_internal;
-  clib_spinlock_init (&bm->buffer_known_hash_lockp);
 
   /* allocate default region */
   error = vlib_physmem_region_alloc (vm, "buffers",
