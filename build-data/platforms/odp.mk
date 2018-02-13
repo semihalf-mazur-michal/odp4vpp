@@ -34,7 +34,11 @@ vlib_configure_args_odp = --with-pre-data=128
 
 #ODP configuration parameters
 odp_uses_odp=yes
-odp_odp_libs = -lodp-dpdk -ldpdk -lodphelper -lpcap
+
+DPDK_PMDS = -Wl,--whole-archive,-lrte_pmd_af_packet,-lrte_pmd_bnxt,-lrte_pmd_bond,-lrte_pmd_cxgbe,-lrte_pmd_e1000,-lrte_pmd_ena,-lrte_pmd_enic,-lrte_pmd_fm10k,-lrte_pmd_i40e,-lrte_pmd_ixgbe,-lrte_pmd_null,-lrte_pmd_null_crypto,-lrte_pmd_pcap,-lrte_pmd_qede,-lrte_pmd_ring,-lrte_pmd_sfc_efx,-lrte_pmd_tap,-lrte_pmd_vhost,-lrte_pmd_virtio,-lrte_pmd_vmxnet3_uio,--no-whole-archive
+
+odp_odp_libs = -lodp-linux -ldpdk -lodphelper -lpcap $(DPDK_PMDS)
+
 odp_odp_inc_dir=$(ODP_INST_PATH)/include
 odp_odp_lib_dir=$(ODP_INST_PATH)/lib
 
