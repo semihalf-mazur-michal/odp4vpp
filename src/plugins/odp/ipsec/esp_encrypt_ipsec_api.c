@@ -42,7 +42,7 @@ typedef enum
 #define foreach_esp_encrypt_error                   \
  _(RX_PKTS, "ESP pkts received")                    \
  _(NO_BUFFER, "No buffer (packet dropped)")         \
- _(DECRYPTION_FAILED, "ESP encryption failed")      \
+ _(ENCRYPTION_FAILED, "ESP encryption failed")      \
  _(SEQ_CYCLED, "sequence number cycled")
 
 
@@ -206,6 +206,7 @@ odp_ipsec_esp_encrypt_node_fn (vlib_main_t * vm,
 
 	  if (PREDICT_TRUE (sa0->crypto_alg != IPSEC_CRYPTO_ALG_NONE))
 	    {
+	      odp_ipsec_packet_result_t result;
 	      odp_packet_t pkt = odp_packet_from_vlib_buffer (i_b0);
 	      odp_packet_t out_pkt;
 	      odp_ipsec_out_inline_param_t ipsec_inline_params;
@@ -264,8 +265,17 @@ odp_ipsec_esp_encrypt_node_fn (vlib_main_t * vm,
 		  && !(is_inline
 		       && next0 == ESP_ENCRYPT_NEXT_INTERFACE_OUTPUT))
 		{
-		  o_b0 = vlib_buffer_from_odp_packet (out_pkt);
+		  odp_ipsec_result (&result, out_pkt);
+		  if (PREDICT_FALSE (result.status.all != ODP_IPSEC_OK))
+		    {
+		      vlib_node_increment_counter (vm,
+						   odp_ipsec_esp_encrypt_node.index,
+						   ESP_ENCRYPT_ERROR_ENCRYPTION_FAILED,
+						   from_frame->n_vectors);
+		      goto trace;
+		    }
 
+		  o_b0 = vlib_buffer_from_odp_packet (out_pkt);
 
 		  o_b0->current_data =
 		    (i16) ((intptr_t) odp_packet_data (out_pkt) -

@@ -180,6 +180,7 @@ odp_ipsec_esp_decrypt_node_fn (vlib_main_t * vm,
 	  else
 	    next0 = ESP_DECRYPT_NEXT_IP4_INPUT;
 
+	  odp_ipsec_packet_result_t result;
 	  odp_packet_t pkt = odp_packet_from_vlib_buffer (i_b0);
 	  odp_packet_t out_pkt;
 
@@ -211,6 +212,16 @@ odp_ipsec_esp_decrypt_node_fn (vlib_main_t * vm,
 
 	  if (!is_async)
 	    {
+	      odp_ipsec_result (&result, out_pkt);
+	      if (PREDICT_FALSE (result.status.all != ODP_IPSEC_OK))
+		{
+		  vlib_node_increment_counter (vm,
+					       odp_ipsec_esp_decrypt_node.index,
+					       ESP_DECRYPT_ERROR_DECRYPTION_FAILED,
+					       from_frame->n_vectors);
+		  goto trace;
+		}
+
 	      o_b0 = vlib_buffer_from_odp_packet (out_pkt);
 
 	      /* add the change of the ODP data offset
