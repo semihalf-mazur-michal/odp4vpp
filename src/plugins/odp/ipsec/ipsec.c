@@ -84,92 +84,6 @@ vpp_to_odp_auth_alg (int vpp_auth_alg)
     }
 }
 
-int				// should flow_label be here?
-create_odp_sa (ipsec_sa_t * sa, sa_data_t * sa_sess_data, int flow_label,
-	       int is_outbound)
-{
-  odp_crypto_main_t *ocm = &odp_crypto_main;
-  u32 thread_index = vlib_get_thread_index ();
-  odp_crypto_worker_main_t *cwm =
-    vec_elt_at_index (ocm->workers, thread_index);
-
-  odp_ipsec_sa_param_t sa_params;
-  odp_ipsec_sa_param_init (&sa_params);
-
-  sa_params.dir =
-    (is_outbound ? ODP_IPSEC_DIR_OUTBOUND : ODP_IPSEC_DIR_INBOUND);
-  /* VPP does not currently support Authentication Headers (AH),
-     Encapsulating Security Payload (ESP), neither does this code.
-     Code needs modification, not only in this place. */
-  sa_params.proto = ODP_IPSEC_ESP;
-  sa_params.mode =
-    (sa->is_tunnel ? ODP_IPSEC_MODE_TUNNEL : ODP_IPSEC_MODE_TRANSPORT);
-
-  if (sa_params.mode == ODP_IPSEC_MODE_TUNNEL
-      && sa_params.dir == ODP_IPSEC_DIR_OUTBOUND)
-    {
-      if (sa->is_tunnel_ip6)
-	{
-	  sa_sess_data->tunnel_src.ip6 = sa->tunnel_src_addr.ip6;
-	  sa_sess_data->tunnel_dst.ip6 = sa->tunnel_dst_addr.ip6;
-	  sa_params.outbound.tunnel.type = ODP_IPSEC_TUNNEL_IPV6;
-	  sa_params.outbound.tunnel.ipv6.dst_addr =
-	    &sa_sess_data->tunnel_dst.ip6;
-	  sa_params.outbound.tunnel.ipv6.src_addr =
-	    &sa_sess_data->tunnel_src.ip6;
-	  sa_params.outbound.tunnel.ipv6.hlimit = 42;
-	  sa_params.outbound.tunnel.ipv6.dscp = 0;
-	  sa_params.outbound.tunnel.ipv6.flabel = flow_label;
-	}
-      else
-	{
-	  sa_sess_data->tunnel_src.ip4 = sa->tunnel_src_addr.ip4;
-	  sa_sess_data->tunnel_dst.ip4 = sa->tunnel_dst_addr.ip4;
-	  sa_params.outbound.tunnel.type = ODP_IPSEC_TUNNEL_IPV4;
-	  sa_params.outbound.tunnel.ipv4.dst_addr =
-	    &sa_sess_data->tunnel_dst.ip4;
-	  sa_params.outbound.tunnel.ipv4.src_addr =
-	    &sa_sess_data->tunnel_src.ip4;
-	  sa_params.outbound.tunnel.ipv4.ttl = 42;
-	  sa_params.outbound.tunnel.ipv4.df = 42;
-	}
-    }
-
-  if (sa_params.dir == ODP_IPSEC_DIR_INBOUND && is_inline)
-    {
-      sa_params.inbound.lookup_mode = ODP_IPSEC_LOOKUP_SPI;
-      sa_params.inbound.lookup_param.ip_version =
-	(sa->is_tunnel_ip6 ? ODP_IPSEC_IPV6 : ODP_IPSEC_IPV4);
-    }
-
-  sa_params.crypto.cipher_alg = ODP_CIPHER_ALG_AES_CBC;
-  sa_params.crypto.cipher_key.data = sa->crypto_key;
-  sa_params.crypto.cipher_key.length = sa->crypto_key_len;
-
-  sa_params.crypto.auth_alg = vpp_to_odp_auth_alg (sa->integ_alg);
-  sa_params.crypto.auth_key.data = sa->integ_key;
-  sa_params.crypto.auth_key.length = sa->integ_key_len;
-
-  sa_params.lifetime.soft_limit.packets = 0;
-  sa_params.lifetime.hard_limit.packets = 0;
-
-  sa_params.spi = sa->spi;
-
-  sa_params.dest_queue =
-    (is_outbound ? cwm->post_encrypt : cwm->post_decrypt);
-  sa_params.context = NULL;
-  sa_params.context_len = 0;
-
-  sa_sess_data->odp_sa = odp_ipsec_sa_create (&sa_params);	// check if there are no errors
-
-  if (sa_sess_data->odp_sa == ODP_IPSEC_SA_INVALID)
-    return -1;
-
-  sa_sess_data->is_odp_sa_present = 1;
-
-  return 0;
-}
-
 int
 create_sess (ipsec_sa_t * sa, sa_data_t * sa_sess_data, int is_outbound)
 {
@@ -334,10 +248,7 @@ ipsec_init (vlib_main_t * vm)
 
   ipsec_node = vlib_get_node_by_name (vm, (u8 *) "ipsec-output-ip4");
   ASSERT (ipsec_node);
-  if (enable_odp_ipsec)
-    crypto_node = vlib_get_node_by_name (vm, (u8 *) "odp-ipsec-esp-encrypt");
-  else
-    crypto_node = vlib_get_node_by_name (vm, (u8 *) "odp-crypto-esp-encrypt");
+  crypto_node = vlib_get_node_by_name (vm, (u8 *) "odp-crypto-esp-encrypt");
   ASSERT (crypto_node);
   im->esp_encrypt_node_index = crypto_node->index;
   im->esp_encrypt_next_index =
@@ -345,10 +256,7 @@ ipsec_init (vlib_main_t * vm)
 
   ipsec_node = vlib_get_node_by_name (vm, (u8 *) "ipsec-input-ip4");
   ASSERT (ipsec_node);
-  if (enable_odp_ipsec)
-    crypto_node = vlib_get_node_by_name (vm, (u8 *) "odp-ipsec-esp-decrypt");
-  else
-    crypto_node = vlib_get_node_by_name (vm, (u8 *) "odp-crypto-esp-decrypt");
+  crypto_node = vlib_get_node_by_name (vm, (u8 *) "odp-crypto-esp-decrypt");
   ASSERT (crypto_node);
   im->esp_decrypt_node_index = crypto_node->index;
   im->esp_decrypt_next_index =
@@ -388,42 +296,6 @@ ipsec_init (vlib_main_t * vm)
     {
       ocm->workers[0].post_encrypt = ocm->workers[1].post_encrypt;
       ocm->workers[0].post_decrypt = ocm->workers[1].post_decrypt;
-    }
-
-  if (enable_odp_ipsec)
-    {
-      odp_ipsec_config_t ipsec_config;
-      odp_ipsec_capability_t ipsec_capa;
-
-      odp_ipsec_capability (&ipsec_capa);
-
-      odp_ipsec_config_init (&ipsec_config);
-
-      if (is_inline)
-	{
-	  if (ipsec_capa.op_mode_inline_in != ODP_SUPPORT_NO
-	      && ipsec_capa.op_mode_inline_out != ODP_SUPPORT_NO)
-	    clib_error_return (0,
-			       "Inline " CAPA_NOT_SUPP
-			       " (need it at both TX and RX)");
-	  ipsec_config.inbound_mode = ODP_IPSEC_OP_MODE_INLINE;
-	  ipsec_config.outbound_mode = ODP_IPSEC_OP_MODE_INLINE;
-	}
-      else if (is_async)
-	{
-	  if (ipsec_capa.op_mode_async != ODP_SUPPORT_NO)
-	    clib_error_return (0, "Async " CAPA_NOT_SUPP);
-	  ipsec_config.inbound_mode = ODP_IPSEC_OP_MODE_ASYNC;
-	  ipsec_config.outbound_mode = ODP_IPSEC_OP_MODE_ASYNC;
-	}
-      else
-	{
-	  if (ipsec_capa.op_mode_sync != ODP_SUPPORT_NO)
-	    clib_error_return (0, "Sync " CAPA_NOT_SUPP);
-	  ipsec_config.inbound_mode = ODP_IPSEC_OP_MODE_SYNC;
-	  ipsec_config.outbound_mode = ODP_IPSEC_OP_MODE_SYNC;
-	}
-      odp_ipsec_config (&ipsec_config);
     }
 
   return 0;

@@ -21,7 +21,6 @@
 typedef struct
 {
   u8 is_odp_sa_present;
-  odp_ipsec_sa_t odp_sa;
   odp_crypto_session_t sess;
   u32 digest_size;
   u8 iv_data[16];
