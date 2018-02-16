@@ -1172,7 +1172,7 @@ sse2_pol_logical_2_physical (sse2_qos_pol_cfg_params_st * cfg,
 			     policer_read_response_type_st * phys)
 {
   int rc;
-  sse2_qos_pol_hw_params_st pol_hw;
+//  sse2_qos_pol_hw_params_st pol_hw;
   sse2_qos_pol_cfg_params_st kbps_cfg;
 
   memset (phys, 0, sizeof (policer_read_response_type_st));
@@ -1271,7 +1271,7 @@ sse2_pol_logical_2_physical (sse2_qos_pol_cfg_params_st * cfg,
     }
 
   // Touch to avoid compiler warning for X86
-  pol_hw.allow_negative = pol_hw.allow_negative;
+  //pol_hw.allow_negative = pol_hw.allow_negative;
 
 #endif // if !defined (INTERNAL_SS) && !defined (X86)
 
