@@ -1,0 +1,42 @@
+From fccc383bc9e0482c2d08c929909f89423c7fb4a0 Mon Sep 17 00:00:00 2001
+From: Michal Mazur <mkm@semihalf.com>
+Date: Fri, 12 Jan 2018 19:36:58 +0100
+Subject: [PATCH 2/5] linux-dpdk: pool: Return address range in pool info
+
+Implement support in odp_pool_info API to provide address range
+ of application accessible pool data.
+
+Pull request of API change for reference:
+https://github.com/Linaro/odp/pull/200
+
+Signed-off-by: Michal Mazur <mkm@semihalf.com>
+---
+ platform/linux-dpdk/odp_pool.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/platform/linux-dpdk/odp_pool.c b/platform/linux-dpdk/odp_pool.c
+index 0821cdc..ebb9e0d 100644
+--- a/platform/linux-dpdk/odp_pool.c
++++ b/platform/linux-dpdk/odp_pool.c
+@@ -605,6 +605,7 @@ int odp_pool_info(odp_pool_t pool_hdl, odp_pool_info_t *info)
+ {
+ 	uint32_t pool_id = pool_handle_to_index(pool_hdl);
+ 	pool_entry_t *pool = get_pool_entry(pool_id);
++	struct rte_mempool_memhdr *hdr;
+ 
+ 	if (pool == NULL || info == NULL)
+ 		return -1;
+@@ -612,6 +613,10 @@ int odp_pool_info(odp_pool_t pool_hdl, odp_pool_info_t *info)
+ 	info->name = pool->s.name;
+ 	info->params = pool->s.params;
+ 
++	hdr = STAILQ_FIRST(&pool->s.rte_mempool->mem_list);
++	info->min_data_addr = (uint64_t) hdr->addr;
++	info->max_data_addr = (uint64_t) hdr->addr + hdr->len - 1;
++
+ 	return 0;
+ }
+ 
+-- 
+2.7.4
+
