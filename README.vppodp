@@ -11,6 +11,33 @@ of packet paths. It envisions three deployment scenarios:
 -Systems on a Chip
 -SmartNIC with low to very high core count
 
+
+#Known issues:
+--------------
+	1) ODP and VPP make use of the same signal, and one crashes the other.
+	   To remedy this issue there is a workaround in odp4vpp commit
+	   "plugins: odp: [WA] Force inline mode of ODP timer" (708ae49)
+	   More details in commit log.
+	2) When using release version of odp4vpp with scripts using vppctl,
+	   something causes it to crash when creating pktio, more precisely
+	   during the dpdk initialization.
+	   Pktio interfaces can still be added via CLI or startup.conf.
+	   This issue does not happen in debug version, when valgrind macro
+	   VALGRIND_MALLOCLIKE_BLOCK is enabled in clib_mem_alloc_aligned_at_offset.
+	3) Currently both odp and odp-dpdk both share the same crypto
+	   implementation which resides in the linux-generic folder, odp4vpp
+	   IPsec nodes support this implentations.
+	   During development odp-dpdk v1.15 was used with DPDK openssl_pmd
+	   driver, this configuration is a bit obsolete and requires major
+	   changes in odp4vpp. More information further in build section.
+	4) I40e DPDK driver fails to reset NIC (Intel X710) when using current
+	   odp-dpdk on virtual machine. This issue is related to recent change
+	   from DPDK 17.02 to 17.08 in odp-dpdk and may be fixed in future.
+	   A lot of testing of odp4vpp was done using the i40e driver and it is
+	   possible to use it with older odp-dpdk v1.15 and DPDK 17.02.
+	   More information in Build section.
+
+
 #Build Procedure:
 ----------------
 The source code add support to build VPP with either odp-dpdk or modified odp-linux.
@@ -18,104 +45,155 @@ Generic odp-linux is not supported as it keeps user area outside packet buffer.
 VPP requires the user area (used to store vlib_buffer_t) to be located just before packet data.
 
 
-1)Build vpp with odp-linux:
----------------------------
-Build the odp linux package by compiling odp from odp git repository:
-
-git clone https://git.linaro.org/lng/odp.git
-
-This release was tested with v1.17.0.0 version and with three additional patches.
-Patches can be found in odp/odp-linux directory:
-0001-linux-generic-pool-Return-address-range-in-pool-info.patch
-0002-linux-generic-Place-userdata-before-packet-data.patch
-
-If ODP IPsec will be tested in inline mode, using dpdk/socket pktio respectively
-0003-inline-HACK-in-dpdk-pktio.patch
-0004-inline-HACK-in-socket-pktio.patch
-
-
-Follow the README steps for complete build.
-
-- default pktio
-cd odp
-./bootstrap
-./configure --prefix=<odp-install-path>
-make install
-
-- dpdk pktio
-use scripts/build-pktio-dpdk to compile odp-linux with dpdk pktio
-
-
-Build vpp:
-Follow the README steps for complete build.
-
-Set the environment variables with ODP config:
-export PLATFORM=odp
-export ODP_INST_PATH=<odp-install-path>
-export ODP_PLATFORM_PARAMS="-m 400"
-
-- default pktio
-Adjust odp_odp_libs in build-data/platforms/odp.mk:
-odp_odp_libs = -lodp-linux -lodphelper -lpcap
-
-- dpdk pktio 
-export LIBRARY_PATH=<dpdk-install-path>/lib/
-Adjust odp_odp_libs in build-data/platforms/odp.mk:
-odp_odp_libs = -lodp-linux -ldpdk -lodphelper -lpcap
-
-cd vpp
-make install-dep
-make build
-make run
-
-
-2)Build vpp with odp-dpdk:
---------------------------
+1)Build vpp with current odp-dpdk
+---------------------------------
 Build the odp-dpdk package by compiling odp-dpdk from odp-dpdk git repository:
 
-git clone https://git.linaro.org/lng/odp-dpdk.git
+  git clone https://git.linaro.org/lng/odp-dpdk.git
 
-This release was tested on master branch with commit e78e28ea32d5 with three
-additional patches.  Patches can be found in odp/odp-dpdk directory:
-0001-linux-dpdk-pool-Return-address-range-in-pool-info.patch
+This release was tested on master branch on commit: b1c43018a834a1cc6c182d9677083b068508a5b5
 
-When using odp_crypto based IPsec the fixes below are necessary
-0002-linux-dpdk-crypto-Change-queue-amount.patch
-0003-Changed-the-digest-size-of-SHA256_HMAC.patch
+When using odp_crypto based IPsec, additional fixes for odp-dpdk are necessary
+They can be found in odp4vpp/odp/odp-dpdk directory.
+    0002-linux-dpdk-crypto-Change-queue-amount.patch
+    0003-Changed-the-digest-size-of-SHA256_HMAC.patch
 
 If ODP IPsec will be tested in inline mode, this is also needed
-0004-HACK-enable-inline-for-odp-dpdk.patch
-
+    0004-HACK-enable-inline-for-odp-dpdk.patch
 
 Follow the odp-dpdk/README.DPDK steps for complete build with dpdk.
 
-git clone --single-branch --branch=v17.08 http://dpdk.org/git/dpdk
-cd dpdk
-make config T=x86_64-native-linuxapp-gcc O=x86_64-native-linuxapp-gcc
-sed -ri 's,(CONFIG_RTE_LIBRTE_PMD_OPENSSL=).*,\1y,' x86_64-native-linuxapp-gcc/.config
-sed -ri 's,(CONFIG_RTE_LIBRTE_PMD_PCAP=).*,\1y,' x86_64-native-linuxapp-gcc/.config
-make O=x86_64-native-linuxapp-gcc EXTRA_CFLAGS="-fPIC"
+  git clone --single-branch --branch=v17.08 http://dpdk.org/git/dpdk
+  cd dpdk
+  make config T=x86_64-native-linuxapp-gcc O=x86_64-native-linuxapp-gcc
+  sed -ri 's,(CONFIG_RTE_LIBRTE_PMD_OPENSSL=).*,\1y,' x86_64-native-linuxapp-gcc/.config
+  sed -ri 's,(CONFIG_RTE_LIBRTE_PMD_PCAP=).*,\1y,' x86_64-native-linuxapp-gcc/.config
+  make O=x86_64-native-linuxapp-gcc EXTRA_CFLAGS="-fPIC"
 
-cd odp-dpdk
-./bootstrap
-./configure --prefix=<odp-dpdk-install-path> --with-dpdk-path=<dpdk-dir>/x86_64-native-linuxapp-gcc
-make install
+  cd odp-dpdk
+  ./bootstrap
+  ./configure --prefix=<odp-dpdk-install-path> --with-dpdk-path=<dpdk-dir>/x86_64-native-linuxapp-gcc
+  make install
 
 Set the environment variables with ODP config:
 
-export PLATFORM=odp
-export ODP_INST_PATH=<odp-dpdk-install-path>
-export LIBRARY_PATH=<dpdk-dir>/x86_64-native-linuxapp-gcc/lib/
-export ODP_PLATFORM_PARAMS="-m 400 --vdev crypto_openssl"
-
+  export PLATFORM=odp
+  export ODP_INST_PATH=<odp-dpdk-install-path>
+  export LIBRARY_PATH=<dpdk-dir>/x86_64-native-linuxapp-gcc/lib/
+  export ODP_PLATFORM_PARAMS="-m 400 --vdev crypto_openssl"
 
 Build vpp:
 Follow the README steps for complete build.
 
-cd odp4vpp
-make install-dep
-make build
-make run
+  cd odp4vpp
+  make install-dep
+  make build
+  make run
+
+
+2) Build vpp with odp-dpdk 1.15
+-------------------------------
+To build with v1.15 major changes are required
+
+First checkout odp-dpdk on commit 4e156391d677340ae095
+which is ahead of v1.15 a bit, but that is necessary.
+
+Apply these patches to odp-dpdk from odp4vpp/odp/odp-dpdk_v1.15/odp-dpdk directory:
+		0001-api-pool-Return-address-range-for-pool-objects.patch
+		0002-linux-dpdk-pool-Return-address-range-in-pool-info.patch
+	when using odp_crypto based IPsec:
+		0003-linux-dpdk-crypto-Change-queue-amount.patch
+		0004-Changed-the-digest-size-of-SHA256_HMAC.patch
+		0005-Take-pref_mode-into-consideration-when-deciding-betw.patch
+Apply these patches to odp4vpp from odp4vpp/odp/odp-dpdk_v1.15/odp4vpp directory:
+		0001-Add-compile-time-flag-to-disable-the-odp_ipsec-API.patch
+	when using odp_crypto based IPsec:
+		0002-Add-aad-length-initialization-due-to-bug-in-old-odp-.patch
+
+Building DPDK 17.02 for odp-dpdk v1.15
+
+  git clone --single-branch --branch=v17.02 http://dpdk.org/git/dpdk
+  cd dpdk
+  make config T=x86_64-native-linuxapp-gcc O=x86_64-native-linuxapp-gcc
+  sed -ri 's,(CONFIG_RTE_LIBRTE_PMD_OPENSSL=).*,\1y,' x86_64-native-linuxapp-gcc/.config
+  sed -ri 's,(CONFIG_RTE_LIBRTE_PMD_PCAP=).*,\1y,' x86_64-native-linuxapp-gcc/.config
+  sed -ri 's,(CONFIG_RTE_BUILD_SHARED_LIB=).*,\1y,' x86_64-native-linuxapp-gcc/.config
+create separate directory lib-pmd for DPDK PMDs and adjust CONFIG_RTE_EAL_PMD_PATH accordingly:
+  sed -ri 's,(CONFIG_RTE_EAL_PMD_PATH=).*,\1<path to lib-pmd>,' x86_64-native-linuxapp-gcc/.config
+  make O=x86_64-native-linuxapp-gcc EXTRA_CFLAGS="-fPIC"
+Copy all PMDs from x86_64-native-linuxapp-gcc to the new lib-pmd directory:
+  cp x86_64-native-linuxapp-gcc/lib/librte_pmd* <path to lib-pmd>
+Copy other DPDK libraries to /usr/lib/
+
+Building odp-dpdk:
+
+  cd odp-dpdk
+  ./bootstrap
+  ./configure --prefix=<odp-dpdk-install-path> --with-sdk-install-path=<dpdk-dir>/x86_64-native-linuxapp-gcc
+  make install
+
+Set the environment variables with ODP config:
+
+  export PLATFORM=odp
+  export ODP_INST_PATH=<odp-dpdk-install-path>
+  export ODP_PLATFORM_PARAMS="-m 400 --vdev crypto_openssl"
+
+Build vpp:
+
+  cd odp4vpp
+  make install-dep
+  make build
+  make run
+
+
+3)Build vpp with odp-linux:
+---------------------------
+Build the odp linux package by compiling odp from odp git repository:
+
+  git clone https://git.linaro.org/lng/odp.git
+
+This release was tested with v1.17.0.0 version plus four additional patches.
+Patches can be found in odp4vpp/odp/odp-linux directory:
+    0001-linux-generic-pool-Return-address-range-in-pool-info.patch
+    0002-linux-generic-Place-userdata-before-packet-data.patch
+
+If ODP IPsec will be tested in inline mode, using dpdk/socket pktio respectively
+    0003-inline-HACK-in-dpdk-pktio.patch
+    0004-inline-HACK-in-socket-pktio.patch
+
+Follow the README steps for complete build.
+
+- default pktio
+  cd odp
+  ./bootstrap
+  ./configure --prefix=<odp-install-path>
+  make install
+
+- dpdk pktio
+Use scripts/build-pktio-dpdk to compile odp-linux with dpdk pktio
+
+Build vpp:
+Follow the README steps for complete build.
+
+Set the environment variables with ODP config:
+  export PLATFORM=odp
+  export ODP_INST_PATH=<odp-install-path>
+  export ODP_PLATFORM_PARAMS="-m 400"
+
+- default pktio
+Adjust odp_odp_libs in build-data/platforms/odp.mk:
+  odp_odp_libs = -lodp-linux -lodphelper -lpcap
+
+- dpdk pktio
+  export LIBRARY_PATH=<dpdk-install-path>/lib/
+Adjust odp_odp_libs in build-data/platforms/odp.mk:
+  odp_odp_libs = -lodp-linux -ldpdk -lodphelper -lpcap
+
+  cd vpp
+  make install-dep
+  make build
+  make run
+
 
 #Test Steps:
 ------------

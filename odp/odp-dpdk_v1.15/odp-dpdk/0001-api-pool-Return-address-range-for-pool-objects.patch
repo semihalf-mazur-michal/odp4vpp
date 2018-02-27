@@ -1,0 +1,46 @@
+From ae2c6e606bc0f276325dc1bcfdcc7270f1eab1ad Mon Sep 17 00:00:00 2001
+From: Sachin Saxena <sachin.saxena@nxp.com>
+Date: Tue, 10 Oct 2017 12:14:17 +0530
+Subject: [PATCH 1/5] api: pool: Return address range for pool objects
+
+Pool info support has been extented to provide minimum and maximum
+addresses of application accessible data for any pool object (event).
+
+Signed-off-by: Sachin Saxena <sachin.saxena@nxp.com>
+Reviewed-by: Petri Savolainen <petri.savolainen@linaro.org>
+Reviewed-by: Bill Fischofer <bill.fischofer@linaro.org>
+Signed-off-by: Maxim Uvarov <maxim.uvarov@linaro.org>
+---
+ include/odp/api/spec/pool.h | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/include/odp/api/spec/pool.h b/include/odp/api/spec/pool.h
+index 6fc5b6b..c50d649 100644
+--- a/include/odp/api/spec/pool.h
++++ b/include/odp/api/spec/pool.h
+@@ -280,6 +280,22 @@ odp_pool_t odp_pool_lookup(const char *name);
+ typedef struct odp_pool_info_t {
+ 	const char *name;          /**< pool name */
+ 	odp_pool_param_t params;   /**< pool parameters */
++
++	/** Minimum data address.
++	 * This is the minimum address that application accessible
++	 * data of any object (event) allocated from the pool may
++	 * locate. When there's no application accessible data
++	 * (e.g. ODP_POOL_TIMEOUT pools), the value may be zero.
++	 */
++	uintptr_t min_data_addr;
++
++	/** Maximum data address.
++	 * This is the maximum address that application accessible
++	 * data of any object (event) allocated from the pool may
++	 * locate. When there's no application accessible data
++	 * (e.g. ODP_POOL_TIMEOUT pools), the value may be zero.
++	 */
++	uintptr_t max_data_addr;
+ } odp_pool_info_t;
+ 
+ /**
+-- 
+2.7.4
+

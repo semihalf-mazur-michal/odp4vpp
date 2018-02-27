@@ -1,0 +1,39 @@
+From 5d8651a8043f5738692cf952aa304ed33af7bc59 Mon Sep 17 00:00:00 2001
+From: Szymon Sliwa <szs@semihalf.com>
+Date: Tue, 27 Feb 2018 18:21:19 +0100
+Subject: [PATCH 2/2] Add aad length initialization due to bug in old odp-dpdk
+
+---
+ src/plugins/odp/ipsec/esp_decrypt.c | 2 ++
+ src/plugins/odp/ipsec/esp_encrypt.c | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/src/plugins/odp/ipsec/esp_decrypt.c b/src/plugins/odp/ipsec/esp_decrypt.c
+index 8a851a7..367712a 100644
+--- a/src/plugins/odp/ipsec/esp_decrypt.c
++++ b/src/plugins/odp/ipsec/esp_decrypt.c
+@@ -203,6 +203,8 @@ odp_crypto_esp_decrypt_node_fn (vlib_main_t * vm,
+ 
+ 	  crypto_op_params.session = sa_sess_data->sess;
+ 	  crypto_op_params.ctx = NULL;
++          crypto_op_params.aad.ptr = NULL;
++          crypto_op_params.aad.length = 0;
+ 	  crypto_op_params.pkt = odp_packet_from_vlib_buffer (b0);
+ 	  crypto_op_params.out_pkt = crypto_op_params.pkt;
+ 	  crypto_op_params.override_iv_ptr = sa_sess_data->iv_data;
+diff --git a/src/plugins/odp/ipsec/esp_encrypt.c b/src/plugins/odp/ipsec/esp_encrypt.c
+index 757eef8..f3faac2 100644
+--- a/src/plugins/odp/ipsec/esp_encrypt.c
++++ b/src/plugins/odp/ipsec/esp_encrypt.c
+@@ -345,6 +345,8 @@ odp_crypto_esp_encrypt_node_fn (vlib_main_t * vm,
+ 
+ 	      crypto_op_params.session = sa_sess_data->sess;
+ 	      crypto_op_params.ctx = NULL;
++              crypto_op_params.aad.ptr = NULL;
++              crypto_op_params.aad.length = 0;
+ 	      crypto_op_params.pkt = pkt;
+ 	      crypto_op_params.out_pkt = pkt;
+ 
+-- 
+2.7.4
+
